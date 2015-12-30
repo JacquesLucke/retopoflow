@@ -42,6 +42,7 @@ import bmesh
 import bpy
 from bpy_extras.view3d_utils import location_3d_to_region_2d, region_2d_to_vector_3d
 from bpy_extras.view3d_utils import region_2d_to_location_3d, region_2d_to_origin_3d
+from bpy.app.handlers import persistent
 
 
 def bversion():
@@ -56,34 +57,50 @@ def get_settings():
     if not get_settings.cached_settings:
         addons = bpy.context.user_preferences.addons
         frame = inspect.currentframe()
+
         while frame:
             folderpath = os.path.dirname(frame.f_code.co_filename)
             foldername = os.path.basename(folderpath)
             frame = frame.f_back
             if foldername in {'lib','addons'}: continue
-            if foldername in addons: break
-        else:
-            assert False, 'could not find non-"lib" folder'
-        get_settings.cached_settings = addons[foldername].preferences
+            
+            if foldername in addons:
+                get_settings.cached_settings = addons[foldername].preferences
+                break
+            else:
+                assert False, 'could not find non-"lib" folder'
+                
+   
     return get_settings.cached_settings
+
+
 get_settings.cached_settings = None
+
+def get_dpi():
+    system_preferences = bpy.context.user_preferences.system
+    factor = getattr(system_preferences, "pixel_size", 1)
+    return int(system_preferences.dpi * factor)
+
+def get_dpi_factor():
+    return get_dpi() / 72
+
+@persistent
+def check_source_target_objects(scene):
+    settings = get_settings()
+
+    if not settings: return #sometimes...there are no settings to get.
+    
+    if settings.source_object not in bpy.context.scene.objects:
+        settings.source_object = ''
+    if settings.target_object not in bpy.context.scene.objects:
+        settings.target_object = ''
 
 def get_source_object():
     settings = get_settings()
 
-    if bpy.context.mode == 'OBJECT':
-        default_source_object_to_active()
-        # check if the source object is set and make sure the object exists in the scene
-        if settings.source_object and settings.source_object in bpy.context.scene.objects:
-            source_object = bpy.data.objects[settings.source_object]
-        # if no objects are set as source or selected, stop
-        elif not bpy.context.active_object:
-            return
-        else:
-            source_object = bpy.context.active_object
-            update_source_object()
-    elif bpy.context.mode == 'EDIT_MESH':
-            source_object = bpy.data.objects[settings.source_object]
+    default_source_object_to_active()
+
+    source_object = bpy.data.objects[settings.source_object]
 
     return source_object
 
